@@ -3,6 +3,8 @@
 A machine learning project that segments e-commerce customers using 
 RFM Analysis and predicts customer segments for new customers.
 
+Live App link: https://rfm-customer-segmentation-ml.streamlit.app/
+
 ## Project Structure
 ```
 E-commerce_customer_segementation_and_prediction/
