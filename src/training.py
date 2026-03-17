@@ -6,7 +6,6 @@ Training module for E-commerce Customer Segmentation
 - Splits data BEFORE scaling to prevent data leakage
 - Fits scaler on training data only
 - Fits KMeans on training data only
-- Assigns segments based on fixed map (random_state=42)
 - Trains supervised models with GridSearchCV
 - Retrains best model on full dataset
 - Saves all models and scaler
@@ -28,7 +27,7 @@ from sklearn.metrics import f1_score
 from xgboost import XGBClassifier
 
 
-# PATHS
+# PATHS 
 
 
 BASE_DIR          = Path(__file__).resolve().parents[1]
@@ -140,9 +139,9 @@ def train_and_select_model(
 def run_training():
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
-    print("=" * 50)
+    
     print("STARTING TRAINING PIPELINE")
-    print("=" * 50)
+    
 
     # Step 1 — Load
     df = load_data()
@@ -162,7 +161,7 @@ def run_training():
     with open(FEATURES_PATH, "w") as f:
         json.dump(X.columns.tolist(), f, indent=2)
 
-    # Step 4 — Split BEFORE scaling — prevents data leakage
+    # Step 4 — Split BEFORE scaling ← prevents data leakage
     X_train, X_test = train_test_split(
         X,
         test_size=0.2,
@@ -171,17 +170,18 @@ def run_training():
     print(f"Train: {X_train.shape} | Test: {X_test.shape}")
 
     # Step 5 — Fit scaler on TRAIN only
+    # Preserve original index to prevent misalignment
     scaler = StandardScaler()
 
     X_train_scaled = pd.DataFrame(
         scaler.fit_transform(X_train),
         columns=["Recency_scaled", "Frequency_scaled", "Monetary_scaled"],
-        index=X_train.index
+        index=X_train.index    #  preserves original index
     )
     X_test_scaled = pd.DataFrame(
         scaler.transform(X_test),
         columns=["Recency_scaled", "Frequency_scaled", "Monetary_scaled"],
-        index=X_test.index
+        index=X_test.index     #  preserves original index
     )
     print("Scaler fitted on training data only — no leakage")
 
@@ -189,30 +189,28 @@ def run_training():
     kmeans = KMeans(n_clusters=4, init="k-means++", random_state=42, n_init=10)
     kmeans.fit(X_train_scaled)
 
-    # Predict on full dataset
+    # Predict segments on full dataset using train-fitted KMeans
     X_full_scaled         = pd.concat([X_train_scaled, X_test_scaled]).sort_index()
     rfm["KMeans_Cluster"] = kmeans.predict(X_full_scaled)
 
-    # Fixed segment map — random_state=42 guarantees same clusters every run
     segment_map = {
         0: "At-Risk Customers",
         1: "Lost Customers",
-        2: "Champions",
-        3: "Loyal Customers"
+        2: "Loyal Customers",
+        3: "Champions"
     }
-
     rfm["Segment"] = rfm["KMeans_Cluster"].map(segment_map)
-    print(f"\nSegment mapping: {segment_map}")
     print("KMeans fitted on training data only — no leakage")
     print(rfm["Segment"].value_counts())
 
     # Step 7 — Label encode
-    le = LabelEncoder()
+    # Use .loc with original index — no misalignment
+    le     = LabelEncoder()
     le.fit(rfm["Segment"])
 
     y_train_encoded = le.transform(rfm.loc[X_train.index, "Segment"])
     y_test_encoded  = le.transform(rfm.loc[X_test.index,  "Segment"])
-    print(f"\nLabel Encoder Classes: {le.classes_}")
+    print(f"Classes: {le.classes_}")
 
     # Step 8 — Train all models
     tuned_models, best_params, best_cv_scores = train_and_select_model(
@@ -232,7 +230,7 @@ def run_training():
             best_score = score
             best_name  = name
 
-    print(f"\nBest Model: {best_name} (F1: {best_score:.4f})")
+    print(f"\n Best Model: {best_name} (F1: {best_score:.4f})")
 
     # Step 10 — Retrain best model on FULL dataset
     print(f"\nRetraining {best_name} on full dataset...")
@@ -267,14 +265,13 @@ def run_training():
     joblib.dump(le,          ENCODER_PATH)
     joblib.dump(kmeans,      KMEANS_PATH)
 
-    print("=" * 50)
-    print(f"Best Model Saved : {best_name}")
+    
+    print(f"Best Model Saved    : {best_name}")
     print(f"Scaler Saved")
     print(f"Label Encoder Saved")
     print(f"KMeans Saved")
     print(f"Features Saved")
-    print("Project complete!")
-    print("=" * 50)
+    
 
 
 if __name__ == "__main__":

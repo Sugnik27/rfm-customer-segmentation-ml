@@ -17,6 +17,7 @@ import streamlit as st
 from src.deployment import predict_single, predict_batch, SEGMENT_ADVICE
 
 
+
 # PAGE CONFIG
 
 
